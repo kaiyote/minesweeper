@@ -3,27 +3,33 @@ defmodule Minesweeper do
 
   use GenServer
 
+  @typep field_t :: [[boolean | non_neg_integer | :flag | :maybe_flag]]
+  @typep mines_t :: [[boolean]]
+
   @typedoc "The Minesweeper GenServer state"
   @type t :: %__MODULE__{
-    field: [[boolean | non_neg_integer]],
-    mines: [[boolean]]
+    field: field_t,
+    mines: mines_t
   }
 
   defstruct ~w(field mines)a
 
+  @doc "This is a desktop client horrible wrapper around phoenix. There is only one game"
+  @gen_server_name {:global, "minesweeper"}
+
   @spec start_link(atom) :: GenServer.on_start
   def start_link(size) when size in ~w(small medium large)a do
-    case GenServer.start_link __MODULE__, size, name: {:global, "minesweeper"} do
+    case GenServer.start_link __MODULE__, size, name: @gen_server_name do
       {:error, {:already_started, pid}} ->
         # state server already exists when we want a new game
         # kill it and restart
         :ok = GenServer.stop pid
-        GenServer.start_link __MODULE__, size, name: {:global, "minesweeper"}
+        GenServer.start_link __MODULE__, size, name: @gen_server_name
       other -> other
     end
   end
 
-  @spec init(atom) :: :ignore | {:ok, any} | {:stop, any} |
+  @spec init(atom) :: :ignore | {:ok, t} | {:stop, any} |
                       {:ok, any, :hibernate | :infinity | non_neg_integer()}
   def init(size) when size in ~w(small medium large)a do
     field = make_field size
@@ -31,16 +37,60 @@ defmodule Minesweeper do
     {:ok, %__MODULE__{field: field, mines: mines}}
   end
 
+  @spec stop() :: :ok
+  def stop do
+    GenServer.cast @gen_server_name, :stop
+  end
+
+  @spec show() :: t
+  def show do
+    GenServer.call @gen_server_name, :show
+  end
+
+  @spec flag(integer, integer) :: t
+  def flag(x, y) do
+    GenServer.call @gen_server_name, {:flag, x, y}
+  end
+
+  @spec pick(integer, integer) :: {:ok | :lose, t}
+  def pick(x, y) do
+    GenServer.call @gen_server_name, {:pick, x, y}
+  end
+
+  def handle_call(:show, _from, state), do: {:reply, state, state}
+  def handle_call({:flag, x, y}, _from, state) do
+    update_fun = fn val ->
+      case val do
+        :flag -> :maybe_flag
+        :maybe_flag -> false
+        false -> :flag
+        x when is_integer x -> x
+      end
+    end
+    new_state = %{state | field: update_position_fun(state.field, x, y, update_fun)}
+    {:reply, new_state, new_state}
+  end
+  def handle_call({:pick, x, y}, _from, state) do
+    case state.mines |> Enum.fetch!(y) |> Enum.fetch!(x) do
+      true -> {:reply, {:lose, state}, state}
+      false ->
+        new_state = uncover state
+        {:reply, {:ok, new_state}, new_state}
+    end
+  end
+
+  def handle_cast(:stop, state), do: {:stop, :normal, state}
+
   @small_size 9
   @medium_size 16
   @large_width 30
 
-  @spec make_field(atom) :: [[boolean]]
-  @spec make_field(integer, integer) :: [[boolean]]
-  def make_field(:small), do: make_field @small_size, @small_size
-  def make_field(:medium), do: make_field @medium_size, @medium_size
-  def make_field(:large), do: make_field @large_width, @medium_size
-  def make_field(width, height) when width >= 9 and height >= 9 do
+  @spec make_field(atom) :: field_t
+  @spec make_field(integer, integer) :: field_t
+  defp make_field(:small), do: make_field @small_size, @small_size
+  defp make_field(:medium), do: make_field @medium_size, @medium_size
+  defp make_field(:large), do: make_field @large_width, @medium_size
+  defp make_field(width, height) when width >= 9 and height >= 9 do
     for _ <- 1..height, do: for _ <- 1..width, do: false
   end
 
@@ -48,22 +98,38 @@ defmodule Minesweeper do
   @medium_count 40
   @large_count 99
 
-  @spec seed_field([[boolean]], atom) :: [[boolean]]
-  @spec seed_field([[boolean]], integer, integer, integer) :: [[boolean]]
-  def seed_field(field, :small), do: seed_field field, @small_size, @small_size, @small_count
-  def seed_field(field, :medium), do: seed_field field, @medium_size, @medium_size, @medium_count
-  def seed_field(field, :large), do: seed_field field, @medium_size, @large_width, @large_count
-  def seed_field(field, _, _, 0), do: field
-  def seed_field(field, max_height, max_width, mine_count) do
+  @spec seed_field(field_t, atom) :: mines_t
+  @spec seed_field(field_t, integer, integer, integer) :: mines_t
+  defp seed_field(field, :small), do: seed_field field, @small_size, @small_size, @small_count
+  defp seed_field(field, :medium), do: seed_field field, @medium_size, @medium_size, @medium_count
+  defp seed_field(field, :large), do: seed_field field, @medium_size, @large_width, @large_count
+  defp seed_field(field, _, _, 0), do: field
+  defp seed_field(field, max_height, max_width, mine_count) do
     y = Enum.random(1..max_height) - 1
     x = Enum.random(1..max_width) - 1
     if field |> Enum.fetch!(y) |> Enum.fetch!(x) do
       seed_field field, max_height, max_width, mine_count
     else
-      chosen_row = Enum.fetch! field, y
-      updated_row = Enum.take(chosen_row, x) ++ [true] ++ Enum.drop(chosen_row, x + 1)
-      updated_field = Enum.take(field, y) ++ [updated_row] ++ Enum.drop(field, y + 1)
+      updated_field = update_position field, x, y, true
       seed_field updated_field, max_height, max_width, mine_count - 1
     end
+  end
+
+  @spec update_position(field_t, integer, integer, any) :: field_t
+  defp update_position(field, x, y, value) when not is_function(value) do
+    update_position_fun field, x, y, fn _ -> value end
+  end
+
+  @spec update_position_fun(field_t, integer, integer, (any -> any)) :: field_t
+  defp update_position_fun(field, x, y, value_fun) when is_function(value_fun, 1) do
+    chosen_row = Enum.fetch! field, y
+    chosen_cell = Enum.fetch! chosen_row, x
+    updated_row = Enum.take(chosen_row, x) ++ [value_fun.(chosen_cell)] ++ Enum.drop(chosen_row, x + 1)
+    Enum.take(field, y) ++ [updated_row] ++ Enum.drop(field, y + 1)
+  end
+
+  @spec uncover(t) :: t
+  defp uncover(state) do
+    state
   end
 end
