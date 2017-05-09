@@ -180,5 +180,5 @@ defimpl String.Chars, for: Minesweeper do
   defp map_to_char(:flag), do: "⚑"
   defp map_to_char(:maybe_flag), do: "?"
   defp map_to_char(0), do: " "
-  defp map_to_char(x), do: to_string x
+  defp map_to_char(x), do: Integer.to_string x
 end
