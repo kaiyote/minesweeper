@@ -57,7 +57,13 @@ defmodule Minesweeper do
     GenServer.call @gen_server_name, {:pick, x, y}
   end
 
+  @spec get_field() :: field_t
+  def get_field do
+    GenServer.call @gen_server_name, :field
+  end
+
   def handle_call(:show, _from, state), do: {:reply, to_string(state), state}
+  def handle_call(:field, _from, state), do: {:reply, state.field, state}
   def handle_call({:flag, x, y}, _from, state) do
     update_fun = fn val ->
       case val do
@@ -126,7 +132,8 @@ defmodule Minesweeper do
   defp update_position_fun(field, x, y, value_fun) when is_function(value_fun, 1) do
     chosen_row = Enum.fetch! field, y
     chosen_cell = Enum.fetch! chosen_row, x
-    updated_row = Enum.take(chosen_row, x) ++ [value_fun.(chosen_cell)] ++ Enum.drop(chosen_row, x + 1)
+    updated_row = Enum.take(chosen_row, x) ++ [value_fun.(chosen_cell)] ++
+      Enum.drop(chosen_row, x + 1)
     Enum.take(field, y) ++ [updated_row] ++ Enum.drop(field, y + 1)
   end
 

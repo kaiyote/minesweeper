@@ -2,7 +2,7 @@ defmodule ElectronPhoenix.UserSocket do
   use Phoenix.Socket
 
   ## Channels
-  # channel "counter:*", ElectronPhoenix.CounterChannel
+  channel "minesweeper:*", ElectronPhoenix.MinesweeperChannel
 
   ## Transports
   transport :websocket, Phoenix.Transports.WebSocket
