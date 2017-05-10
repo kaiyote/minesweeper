@@ -57,13 +57,25 @@ defmodule Minesweeper do
     GenServer.call @gen_server_name, {:pick, x, y}
   end
 
+  @spec force_pick(integer, integer) :: {:ok | :lose, field_t}
+  def force_pick(x, y) do
+    GenServer.call @gen_server_name, {:force_pick, x, y}
+  end
+
   @spec get_field() :: field_t
   def get_field do
     GenServer.call @gen_server_name, :field
   end
 
+  @doc "For debugging / UT only."
+  @spec force_state(t) :: t
+  def force_state(new_state) do
+    GenServer.call @gen_server_name, {:force_state, new_state}
+  end
+
   def handle_call(:show, _from, state), do: {:reply, to_string(state), state}
   def handle_call(:field, _from, state), do: {:reply, state.field, state}
+  def handle_call({:force_state, new_state}, _from, _state), do: {:reply, new_state, new_state}
   def handle_call({:flag, x, y}, _from, state) do
     update_fun = fn val ->
       case val do
@@ -84,6 +96,13 @@ defmodule Minesweeper do
       :blank ->
         new_state = %{state | field: uncover(state.field, state.mines, x, y)}
         {:reply, {:ok, new_state.field}, new_state}
+    end
+  end
+  def handle_call({:force_pick, x, y}, _from, state) do
+    if state.field |> Enum.fetch!(y) |> Enum.fetch!(x) |> (&Enum.member?(0..8, &1)).() do
+      {:reply, {:ok, state.field}, state}
+    else
+      {:reply, {:ok, state.field}, state}
     end
   end
 
@@ -140,7 +159,7 @@ defmodule Minesweeper do
   @spec uncover(field_t, mines_t, integer, integer) :: field_t
   defp uncover(field, mines, x, y) do
     if field |> Enum.fetch!(y) |> Enum.fetch!(x) == :blank do
-      case compute_touch_count mines, x, y do
+      case compute_touch_count mines, x, y, :mine do
         0 ->
           new_field = update_position field, x, y, 0
           max_y = Enum.count(mines) - 1
@@ -158,16 +177,16 @@ defmodule Minesweeper do
     end
   end
 
-  @spec compute_touch_count(mines_t, integer, integer) :: integer
-  defp compute_touch_count(mines, x, y) do
-    max_y = Enum.count(mines) - 1
-    max_x = Enum.count(Enum.fetch! mines, 0) - 1
+  @spec compute_touch_count(mines_t | field_t, integer, integer, :mine | :flag) :: integer
+  defp compute_touch_count(field, x, y, check_value) do
+    max_y = Enum.count(field) - 1
+    max_x = Enum.count(Enum.fetch! field, 0) - 1
     locations = for ix <- x - 1..x + 1,
                     iy <- y - 1..y + 1,
                     ix in 0..max_x,
                     iy in 0..max_y, do: {ix, iy}
     Enum.reduce locations, 0, fn {x, y}, acc ->
-      if mines |> Enum.fetch!(y) |> Enum.fetch!(x) == :mine, do: acc + 1, else: acc end
+      if field |> Enum.fetch!(y) |> Enum.fetch!(x) == check_value, do: acc + 1, else: acc end
   end
 end
 

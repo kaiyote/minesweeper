@@ -1,1 +1,167 @@
-/* This file is for your main application css. */
+body {
+  user-select: none;
+  cursor: default;
+}
+
+.statusRow {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: row;
+}
+
+.statusRow .counter {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  background-color: black;
+}
+
+.digit-1, .digit-2, .digit-3, .digit-4, .digit-5, .digit-6, .digit-7, .digit-8, .digit-9, .digit-0,
+.square-0, .square-1, .square-2, .square-3, .square-4, .square-5, .square-6, .square-7, .square-8,
+.square-covered, .square-flag, .square-exploded, .square-wrong, .square-mine, .square-maybe,
+.square-maybe-pressed, .smiley-neutral, .smiley-neutral-pressed, .smiley-shocked, .smiley-lose, .smiley-win {
+  background-image: url('/images/sprite100.gif');
+  background-repeat: no-repeat;
+}
+
+.digit-1, .digit-2, .digit-3, .digit-4, .digit-5,
+.digit-6, .digit-7, .digit-8, .digit-9, .digit-0 {
+  height: 23px;
+  width: 13px;
+}
+
+.square-0, .square-1, .square-2, .square-3, .square-4, .square-5, .square-6, .square-7, .square-8,
+.square-covered, .square-flag, .square-exploded, .square-wrong, .square-mine, .square-maybe,
+.square-maybe-pressed {
+  height: 16px;
+  width: 16px;
+}
+
+.smiley-neutral, .smiley-neutral-pressed, .smiley-shocked, .smiley-lose, .smiley-win {
+  height: 26px;
+  width: 26px;
+}
+
+.digit-0 {
+  background-position: 0 0;
+}
+
+.digit-1 {
+  background-position: -13px 0;
+}
+
+.digit-2 {
+  background-position: -26px 0;
+}
+
+.digit-3 {
+  background-position: -39px 0;
+}
+
+.digit-4 {
+  background-position: -52px 0;
+}
+
+.digit-5 {
+  background-position: -65px 0;
+}
+
+.digit-6 {
+  background-position: -78px 0;
+}
+
+.digit-7 {
+  background-position: -91px 0;
+}
+
+.digit-8 {
+  background-position: -104px 0;
+}
+
+.digit-9 {
+  background-position: -117px 0;
+}
+
+.smiley-neutral {
+  background-position: 0 -55px;
+}
+
+.smiley-neutral-pressed {
+  background-position: -26px -55px;
+}
+
+.smiley-shocked {
+  background-position: -52px -55px;
+}
+
+.smiley-lose {
+  background-position: -78px -55px;
+}
+
+.smiley-win {
+  background-position: -104px -55px;
+}
+
+.square-0 {
+  background-position: 0 -23px;
+}
+
+.square-1 {
+  background-position: -16px -23px;
+}
+
+.square-2 {
+  background-position: -32px -23px;
+}
+
+.square-3 {
+  background-position: -48px -23px;
+}
+
+.square-4 {
+  background-position: -64px -23px;
+}
+
+.square-5 {
+  background-position: -80px -23px;
+}
+
+.square-6 {
+  background-position: -96px -23px;
+}
+
+.square-7 {
+  background-position: -112px -23px;
+}
+
+.square-8 {
+  background-position: -112px -39px;
+}
+
+.square-covered {
+  background-position: 0 -39px;
+}
+
+.square-flag {
+  background-position: -16px -39px;
+}
+
+.square-exploded {
+  background-position: -32px -39px;
+}
+
+.square-wrong {
+  background-position: -48px -39px;
+}
+
+.square-mine {
+  background-position: -64px -39px;
+}
+
+.square-maybe {
+  background-position: -80px -39px;
+}
+
+.square-maybe-pressed {
+  background-position: -96px -39px;
+}
