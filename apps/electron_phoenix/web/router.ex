@@ -17,7 +17,6 @@ defmodule ElectronPhoenix.Router do
     pipe_through :browser # Use the default browser stack
 
     get "/", PageController, :index
-    get "/counter", PageController, :counter
   end
 
   # Other scopes may use custom stacks.

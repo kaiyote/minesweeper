@@ -8,7 +8,7 @@ use Mix.Config
 # Configures the endpoint
 config :electron_phoenix, ElectronPhoenix.Endpoint,
   url: [host: "localhost"],
-  secret_key_base: "x39KBUFHglhLxOg3VYKdu5b3URg2ihllIXyLlV7p+jOKX5APmlXqHt+UxUbSc/DG",
+  secret_key_base: "Xku7pSBUwocdzl+kFcU7shZlEGXqInbu8tYC0zvE8PnnC9iR2cLP6FqPFLOZuPuC",
   render_errors: [view: ElectronPhoenix.ErrorView, accepts: ~w(html json)],
   pubsub: [name: ElectronPhoenix.PubSub,
            adapter: Phoenix.PubSub.PG2]

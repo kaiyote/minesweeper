@@ -36,7 +36,7 @@ defmodule ElectronPhoenix.Endpoint do
   plug Plug.Session,
     store: :cookie,
     key: "_electron_phoenix_key",
-    signing_salt: "waqq/Tak"
+    signing_salt: "6nveDu3X"
 
   plug ElectronPhoenix.Router
 end
