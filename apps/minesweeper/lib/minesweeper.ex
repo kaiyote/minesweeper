@@ -3,6 +3,8 @@ defmodule Minesweeper do
 
   use GenServer
 
+  alias Minesweeper.Util
+
   @typep field_t :: [[:blank | :flag | :maybe_flag | :mine | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8]]
   @typep mines_t :: [[:blank | :mine]]
 
@@ -14,114 +16,66 @@ defmodule Minesweeper do
 
   defstruct ~w(field mines)a
 
-  @doc "This is a desktop client horrible wrapper around phoenix. There is only one game"
-  @gen_server_name {:global, "minesweeper"}
-
-  @spec start_link(atom) :: GenServer.on_start
-  def start_link(size) when size in ~w(small medium large)a do
-    case GenServer.start_link __MODULE__, size, name: @gen_server_name do
-      {:error, {:already_started, pid}} ->
-        # state server already exists when we want a new game
-        # kill it and restart
-        :ok = GenServer.stop pid
-        GenServer.start_link __MODULE__, size, name: @gen_server_name
-      other -> other
-    end
+  @spec start_link(String.t, :small | :medium | :large) :: GenServer.on_start
+  def start_link(name, size) do
+    GenServer.start_link __MODULE__, size, name: {:global, "minesweeper:#{name}"}
   end
 
   @spec init(atom) :: :ignore | {:ok, t} | {:stop, any} |
                       {:ok, any, :hibernate | :infinity | non_neg_integer()}
   def init(size) when size in ~w(small medium large)a do
-    field = make_field size
-    mines = seed_field field, size
+    height = get_dimension size, :height
+    width = get_dimension size, :width
+    field = make_field width, height
+    mines = seed_field field, width, height, size
     {:ok, %__MODULE__{field: field, mines: mines}}
   end
 
-  @spec stop() :: :ok
-  def stop do
-    GenServer.cast @gen_server_name, :stop
+  @spec show(String.t) :: String.t
+  def show(name), do: GenServer.call {:global, "minesweeper:#{name}"}, :show
+
+  @spec get_state(String.t) :: t
+  def get_state(name), do: GenServer.call {:global, "minesweeper:#{name}"}, :get_state
+
+  @spec get_field(String.t) :: field_t
+  def get_field(name) do
+    GenServer.call {:global, "minesweeper:#{name}"}, :get_field
   end
 
-  @spec show() :: :ok
-  def show do
-    GenServer.call @gen_server_name, :show
+  @spec set_state(String.t, t) :: :ok
+  def set_state(name, state) do
+    GenServer.call {:global, "minesweeper:#{name}"}, {:set_state, state}
   end
 
-  @spec flag(integer, integer) :: field_t
-  def flag(x, y) do
-    GenServer.call @gen_server_name, {:flag, x, y}
+  @spec flag(String.t, integer, integer) :: field_t
+  def flag(name, x, y) do
+    GenServer.call {:global, "minesweeper:#{name}"}, {:flag, x, y}
   end
 
-  @spec pick(integer, integer) :: {:ok | :lose, field_t}
-  def pick(x, y) do
-    GenServer.call @gen_server_name, {:pick, x, y}
+  @spec pick(String.t, integer, integer) :: {:ok | :lose, field_t}
+  def pick(name, x, y) do
+    GenServer.call {:global, "minesweeper:#{name}"}, {:pick, x, y}
   end
 
-  @spec force_pick(integer, integer) :: {:ok | :lose, field_t}
-  def force_pick(x, y) do
-    GenServer.call @gen_server_name, {:force_pick, x, y}
-  end
-
-  @spec get_field() :: field_t
-  def get_field do
-    GenServer.call @gen_server_name, :field
-  end
-
-  @spec get_mines() :: mines_t
-  def get_mines do
-    GenServer.call @gen_server_name, :mines
-  end
-
-  @doc "For debugging / UT only."
-  @spec force_state(t) :: t
-  def force_state(new_state) do
-    GenServer.call @gen_server_name, {:force_state, new_state}
-  end
+  @spec stop(String.t) :: :ok
+  def stop(name), do: GenServer.cast {:global, "minesweeper:#{name}"}, :stop
 
   def handle_call(:show, _from, state), do: {:reply, to_string(state), state}
-  def handle_call(:field, _from, state), do: {:reply, state.field, state}
-  def handle_call(:mines, _from, state), do: {:reply, state.mines, state}
-  def handle_call({:force_state, new_state}, _from, _state), do: {:reply, new_state, new_state}
-  def handle_call({:flag, x, y}, _from, state) do
-    update_fun = fn val ->
-      case val do
-        :flag -> :maybe_flag
-        :maybe_flag -> :blank
-        :blank -> :flag
-        x -> x
-      end
+  def handle_call(:get_state, _from, state), do: {:reply, state, state}
+  def handle_call(:get_field, _from, state), do: {:reply, state.field, state}
+  def handle_call({:set_state, new_state}, _from, _state), do: {:reply, :ok, new_state}
+  def handle_call({:flag, x, y}, _from, %{field: field} = state) do
+    new_field = case field |> Enum.fetch!(y) |> Enum.fetch!(x) do
+      :blank -> Util.nested_replace_at field, x, y, :flag
+      :flag -> Util.nested_replace_at field, x, y, :maybe_flag
+      :maybe_flag -> Util.nested_replace_at field, x, y, :blank
+      _ -> field
     end
-    new_state = %{state | field: update_position_fun(state.field, x, y, update_fun)}
-    {:reply, new_state.field, new_state}
+    {:reply, new_field, %{state | field: new_field}}
   end
-  def handle_call({:pick, x, y}, _from, state) do
-    case state.mines |> Enum.fetch!(y) |> Enum.fetch!(x) do
-      :mine ->
-        new_state = %{state | field: update_position(state.field, x, y, :mine)}
-        {:reply, {:lose, new_state.field}, new_state}
-      :blank ->
-        new_state = %{state | field: uncover(state.field, state.mines, x, y)}
-        {:reply, {:ok, new_state.field}, new_state}
-    end
-  end
-  def handle_call({:force_pick, x, y}, _from, state) do
-    if state.field |> Enum.fetch!(y) |> Enum.fetch!(x) |> (&Enum.member?(0..8, &1)).() do
-      max_y = Enum.count(state.field) - 1
-      max_x = Enum.count(Enum.fetch! state.field, 0) - 1
-      locations = for ix <- x - 1..x + 1,
-                      iy <- y - 1..y + 1,
-                      ix in 0..max_x,
-                      iy in 0..max_y, do: {ix, iy}
-      {status, field} = Enum.reduce_while locations, {:ok, state.field}, fn
-        {x, y}, {:ok, _} -> {:cont, pick(x, y)}
-        {_, _}, {:lose, field} -> {:halt, {:lose, field}}
-      end
-
-      new_state = %{state | field: field}
-      {:reply, {status, field}, new_state}
-    else
-      {:reply, {:ok, state.field}, state}
-    end
+  def handle_call({:pick, x, y}, _from, %{field: field, mines: mines} = state) do
+    {status, new_field} = uncover field, mines, x, y
+    {:reply, {status, new_field}, %{state | field: new_field}}
   end
 
   def handle_cast(:stop, state), do: {:stop, :normal, state}
@@ -130,11 +84,7 @@ defmodule Minesweeper do
   @medium_size 16
   @large_width 30
 
-  @spec make_field(atom) :: field_t
   @spec make_field(integer, integer) :: field_t
-  defp make_field(:small), do: make_field @small_size, @small_size
-  defp make_field(:medium), do: make_field @medium_size, @medium_size
-  defp make_field(:large), do: make_field @large_width, @medium_size
   defp make_field(width, height) when width >= 9 and height >= 9 do
     for _ <- 1..height, do: for _ <- 1..width, do: :blank
   end
@@ -143,69 +93,81 @@ defmodule Minesweeper do
   @medium_count 40
   @large_count 99
 
-  @spec seed_field(field_t, atom) :: mines_t
+  @spec seed_field(field_t, integer, integer, atom) :: mines_t
   @spec seed_field(field_t, integer, integer, integer) :: mines_t
-  defp seed_field(field, :small), do: seed_field field, @small_size, @small_size, @small_count
-  defp seed_field(field, :medium), do: seed_field field, @medium_size, @medium_size, @medium_count
-  defp seed_field(field, :large), do: seed_field field, @medium_size, @large_width, @large_count
+  defp seed_field(field, w, h, :small), do: seed_field field, w, h, @small_count
+  defp seed_field(field, w, h, :medium), do: seed_field field, w, h, @medium_count
+  defp seed_field(field, w, h, :large), do: seed_field field, w, h, @large_count
   defp seed_field(field, _, _, 0), do: field
-  defp seed_field(field, max_height, max_width, mine_count) do
-    y = Enum.random(1..max_height) - 1
-    x = Enum.random(1..max_width) - 1
+  defp seed_field(field, width, height, mine_count) do
+    x = Enum.random(1..width) - 1
+    y = Enum.random(1..height) - 1
     if field |> Enum.fetch!(y) |> Enum.fetch!(x) == :mine do
-      seed_field field, max_height, max_width, mine_count
+      seed_field field, width, height, mine_count
     else
-      updated_field = update_position field, x, y, :mine
-      seed_field updated_field, max_height, max_width, mine_count - 1
+      updated_field = Util.nested_replace_at field, x, y, :mine
+      seed_field updated_field, width, height, mine_count - 1
     end
   end
 
-  @spec update_position(field_t, integer, integer, any) :: field_t
-  defp update_position(field, x, y, value) when not is_function(value) do
-    update_position_fun field, x, y, fn _ -> value end
-  end
+  @spec get_dimension(:small | :medium | :large, :height | :width) :: integer
+  defp get_dimension(:small, _), do: @small_size
+  defp get_dimension(:medium, _), do: @medium_size
+  defp get_dimension(:large, :height), do: @medium_size
+  defp get_dimension(:large, :width), do: @large_width
 
-  @spec update_position_fun(field_t, integer, integer, (any -> any)) :: field_t
-  defp update_position_fun(field, x, y, value_fun) when is_function(value_fun, 1) do
-    chosen_row = Enum.fetch! field, y
-    chosen_cell = Enum.fetch! chosen_row, x
-    updated_row = Enum.take(chosen_row, x) ++ [value_fun.(chosen_cell)] ++
-      Enum.drop(chosen_row, x + 1)
-    Enum.take(field, y) ++ [updated_row] ++ Enum.drop(field, y + 1)
-  end
-
-  @spec uncover(field_t, mines_t, integer, integer) :: field_t
+  @spec uncover(field_t, mines_t, integer, integer) :: {:ok | :lose, field_t}
   defp uncover(field, mines, x, y) do
-    if field |> Enum.fetch!(y) |> Enum.fetch!(x) |> (&Enum.member?(~w(blank maybe_flag)a, &1)).() do
-      case compute_touch_count mines, x, y, :mine do
-        0 ->
-          new_field = update_position field, x, y, 0
-          max_y = Enum.count(mines) - 1
-          max_x = Enum.count(Enum.fetch! mines, 0) - 1
-          locations = for ix <- x - 1..x + 1,
-                          iy <- y - 1..y + 1,
-                          ix in 0..max_x,
-                          iy in 0..max_y, do: {ix, iy}
-          Enum.reduce locations, new_field, fn {x, y}, fld -> uncover fld, mines, x, y end
-        count ->
-          update_position field, x, y, count
-      end
-    else
-      field
+    combined_field = field |> Enum.zip(mines) |> Enum.map(fn {f, m} -> Enum.zip(f, m) end)
+    case combined_field |> Enum.fetch!(y) |> Enum.fetch!(x) do
+      {tile, _} when tile == :flag or is_integer(tile) -> {:ok, field} # its a flag, or uncovered
+      {_, :mine} -> {:lose, reveal_mines(field, mines)} # BOOM
+      {_, _} ->
+        value = get_touch_count mines, x, y
+        new_field = Util.nested_replace_at field, x, y, value
+        if value == 0 do
+          height = Enum.count(mines) - 1
+          width = Enum.count(Enum.fetch! mines, 0) - 1
+          check_positions = for i <- x - 1..x + 1,
+                                j <- y - 1..y + 1,
+                                i in 0..width,
+                                j in 0..height, do: {i, j}
+          Enum.reduce_while check_positions, {:ok, new_field}, fn
+            {n_x, n_y}, {:ok, next_field} -> {:cont, uncover(next_field, mines, n_x, n_y)}
+            {_, _}, {:lose, next_field} -> {:halt, {:lose, next_field}}
+          end
+        else
+          {:ok, new_field}
+        end
     end
   end
 
-  @spec compute_touch_count(mines_t | field_t, integer, integer, :mine | :flag) :: integer
-  defp compute_touch_count(field, x, y, check_value) do
-    max_y = Enum.count(field) - 1
-    max_x = Enum.count(Enum.fetch! field, 0) - 1
-    locations = for ix <- x - 1..x + 1,
-                    iy <- y - 1..y + 1,
-                    ix in 0..max_x,
-                    iy in 0..max_y, do: {ix, iy}
-    Enum.reduce locations, 0, fn {x, y}, acc ->
-      if field |> Enum.fetch!(y) |> Enum.fetch!(x) == check_value, do: acc + 1, else: acc
-    end
+  @spec reveal_mines(field_t, mines_t) :: field_t
+  defp reveal_mines(field, mines) do
+    mines
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {row, y} ->
+      row |> Enum.with_index() |> Enum.map(fn {type, x} -> {type, {x, y}} end)
+    end)
+    |> Enum.filter_map(fn {type, _} -> type == :mine end, fn {_, pos} -> pos end)
+    |> Enum.reduce(field, fn {x, y}, field -> Util.nested_replace_at(field, x, y, :mine) end)
+  end
+
+  @spec get_touch_count(mines_t, integer, integer) :: integer
+  defp get_touch_count(mines, x, y) do
+    height = Enum.count(mines) - 1
+    width = Enum.count(Enum.fetch! mines, 0) - 1
+    check_positions = for i <- x - 1..x + 1,
+                          j <- y - 1..y + 1,
+                          i in 0..width,
+                          j in 0..height, do: {i, j}
+    mines
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {row, y} ->
+      row |> Enum.with_index() |> Enum.map(fn {type, x} -> {type, {x, y}} end)
+    end)
+    |> Enum.filter(fn {type, pos} -> type == :mine && pos in check_positions end)
+    |> Enum.count()
   end
 end
 
