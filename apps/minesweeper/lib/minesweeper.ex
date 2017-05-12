@@ -67,6 +67,11 @@ defmodule Minesweeper do
     GenServer.call @gen_server_name, :field
   end
 
+  @spec get_mines() :: mines_t
+  def get_mines do
+    GenServer.call @gen_server_name, :mines
+  end
+
   @doc "For debugging / UT only."
   @spec force_state(t) :: t
   def force_state(new_state) do
@@ -75,6 +80,7 @@ defmodule Minesweeper do
 
   def handle_call(:show, _from, state), do: {:reply, to_string(state), state}
   def handle_call(:field, _from, state), do: {:reply, state.field, state}
+  def handle_call(:mines, _from, state), do: {:reply, state.mines, state}
   def handle_call({:force_state, new_state}, _from, _state), do: {:reply, new_state, new_state}
   def handle_call({:flag, x, y}, _from, state) do
     update_fun = fn val ->
@@ -100,7 +106,19 @@ defmodule Minesweeper do
   end
   def handle_call({:force_pick, x, y}, _from, state) do
     if state.field |> Enum.fetch!(y) |> Enum.fetch!(x) |> (&Enum.member?(0..8, &1)).() do
-      {:reply, {:ok, state.field}, state}
+      max_y = Enum.count(state.field) - 1
+      max_x = Enum.count(Enum.fetch! state.field, 0) - 1
+      locations = for ix <- x - 1..x + 1,
+                      iy <- y - 1..y + 1,
+                      ix in 0..max_x,
+                      iy in 0..max_y, do: {ix, iy}
+      {status, field} = Enum.reduce_while locations, {:ok, state.field}, fn
+        {x, y}, {:ok, _} -> {:cont, pick(x, y)}
+        {_, _}, {:lose, field} -> {:halt, {:lose, field}}
+      end
+
+      new_state = %{state | field: field}
+      {:reply, {status, field}, new_state}
     else
       {:reply, {:ok, state.field}, state}
     end
