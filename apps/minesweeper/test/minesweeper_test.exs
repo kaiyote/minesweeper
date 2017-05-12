@@ -20,17 +20,37 @@ defmodule MinesweeperTest do
   end
 
   test "pick" do
-    Minesweeper.pick 0, 0
-    expected_field = List.update_at @seed_field, 0, fn row ->
-      List.update_at row, 0, fn _ -> 1 end
-    end
-    assert Minesweeper.get_field == expected_field
+    expected_field = List.update_at @seed_field, 0, &(List.update_at &1, 0, const 1)
+    assert Minesweeper.pick(0, 0) == {:ok, expected_field}
 
-    Minesweeper.pick 2, 0
-    expected_field = [[1,      1,      0,      0,      1,      :blank, :blank, :blank, :blank],
-                      [:blank, 2,      1,      1,      1,      :blank, :blank, :blank, :blank]] ++
+
+    expected_field = [[1,      1, 0, 0, 1, :blank, :blank, :blank, :blank],
+                      [:blank, 2, 1, 1, 1, :blank, :blank, :blank, :blank]] ++
                       for _ <- 1..7, do: for _ <- 1..9, do: :blank
-    assert Minesweeper.get_field == expected_field
+    assert Minesweeper.pick(2, 0) == {:ok, expected_field}
+    assert Minesweeper.pick(2, 0) == {:ok, expected_field}
+
+    expected_field = List.update_at expected_field, 1, &(List.update_at &1, 0, const :mine)
+    assert Minesweeper.pick(0, 1) == {:lose, expected_field}
+  end
+
+  test "flag" do
+    Minesweeper.pick 0, 0
+    Minesweeper.pick 2, 0
+
+    expected_field = [[1,      1, 0, 0, 1, :blank, :blank, :blank, :blank],
+                      [:flag,  2, 1, 1, 1, :blank, :blank, :blank, :blank]] ++
+                      for _ <- 1..7, do: for _ <- 1..9, do: :blank
+    assert Minesweeper.flag(0, 1) == expected_field
+    assert Minesweeper.pick(0, 1) == expected_field
+
+    expected_field = List.update_at expected_field, 1, &(List.update_at &1, 0, const :maybe_flag)
+    assert Minesweeper.flag(0, 1) == expected_field
+
+    expected_field = List.update_at expected_field, 1, &(List.update_at &1, 0, const :blank)
+    assert Minesweeper.flag(0, 1) == expected_field
+
+    assert Minesweeper.flag(0, 0) == expected_field
   end
 
   setup do
@@ -40,5 +60,9 @@ defmodule MinesweeperTest do
       mines: @seed_mines
     }
     :ok
+  end
+
+  defp const(val) do
+    fn _ -> val end
   end
 end

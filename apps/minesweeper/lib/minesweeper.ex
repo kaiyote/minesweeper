@@ -176,7 +176,7 @@ defmodule Minesweeper do
 
   @spec uncover(field_t, mines_t, integer, integer) :: field_t
   defp uncover(field, mines, x, y) do
-    if field |> Enum.fetch!(y) |> Enum.fetch!(x) == :blank do
+    if field |> Enum.fetch!(y) |> Enum.fetch!(x) |> (&Enum.member?(~w(blank maybe_flag)a, &1)).() do
       case compute_touch_count mines, x, y, :mine do
         0 ->
           new_field = update_position field, x, y, 0
@@ -204,7 +204,8 @@ defmodule Minesweeper do
                     ix in 0..max_x,
                     iy in 0..max_y, do: {ix, iy}
     Enum.reduce locations, 0, fn {x, y}, acc ->
-      if field |> Enum.fetch!(y) |> Enum.fetch!(x) == check_value, do: acc + 1, else: acc end
+      if field |> Enum.fetch!(y) |> Enum.fetch!(x) == check_value, do: acc + 1, else: acc
+    end
   end
 end
 
