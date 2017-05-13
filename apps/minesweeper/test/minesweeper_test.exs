@@ -138,6 +138,43 @@ defmodule MinesweeperTest do
     end
   end
 
+  test "can determine when you have won by pick", %{name: name} do
+    Minesweeper.pick name, 0, 0
+    Minesweeper.pick name, 2, 0
+    Minesweeper.pick name, 8, 0
+    Minesweeper.pick name, 0, 3
+    Minesweeper.pick name, 8, 8
+    Minesweeper.pick name, 1, 7
+    Minesweeper.pick name, 1, 8
+    Minesweeper.pick name, 2, 8
+    Minesweeper.pick name, 4, 6
+    Minesweeper.pick name, 4, 7
+    Minesweeper.pick name, 3, 7
+    Minesweeper.pick name, 4, 8
+    {status, _} = Minesweeper.pick name, 5, 8
+
+    assert status == :win
+  end
+
+  test "can determine when you have won by force_pick", %{name: name} do
+    Minesweeper.pick name, 0, 0
+    Minesweeper.pick name, 2, 0
+    Minesweeper.pick name, 8, 0
+    Minesweeper.pick name, 0, 3
+    Minesweeper.pick name, 8, 8
+    Minesweeper.pick name, 1, 7
+    Minesweeper.pick name, 1, 8
+    Minesweeper.pick name, 2, 8
+    Minesweeper.pick name, 4, 6
+    Minesweeper.pick name, 4, 7
+    Minesweeper.pick name, 3, 7
+    Minesweeper.pick name, 4, 8
+    Minesweeper.flag name, 3, 8
+    {status, _} = Minesweeper.force_pick name, 4, 8
+
+    assert status == :win
+  end
+
   setup context do
     {:ok, _} = Minesweeper.start_link context.test, :small
     _ = Minesweeper.set_state context.test, %Minesweeper{field: @seed_field, mines: @seed_mines}

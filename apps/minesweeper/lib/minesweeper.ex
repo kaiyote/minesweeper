@@ -125,7 +125,7 @@ defmodule Minesweeper do
   defp get_dimension(:large, :height), do: @medium_size
   defp get_dimension(:large, :width), do: @large_width
 
-  @spec uncover(field_t, mines_t, integer, integer) :: {:ok | :lose, field_t}
+  @spec uncover(field_t, mines_t, integer, integer) :: {:ok | :lose | :win, field_t}
   defp uncover(field, mines, x, y) do
     combined_field = field |> Enum.zip(mines) |> Enum.map(fn {f, m} -> Enum.zip(f, m) end)
     case combined_field |> Enum.fetch!(y) |> Enum.fetch!(x) do
@@ -134,19 +134,17 @@ defmodule Minesweeper do
       {_, _} ->
         value = get_touch_count mines, x, y, :mine
         new_field = Util.nested_replace_at field, x, y, value
-        if value == 0 do
-          height = Enum.count(mines) - 1
-          width = Enum.count(Enum.fetch! mines, 0) - 1
-          check_positions = for i <- x - 1..x + 1,
-                                j <- y - 1..y + 1,
-                                i in 0..width,
-                                j in 0..height, do: {i, j}
-          Enum.reduce_while check_positions, {:ok, new_field}, fn
-            {n_x, n_y}, {:ok, next_field} -> {:cont, uncover(next_field, mines, n_x, n_y)}
-            {_, _}, {:lose, next_field} -> {:halt, {:lose, next_field}}
-          end
-        else
-          {:ok, new_field}
+        cond do
+          value == 0 ->
+            height = Enum.count(mines) - 1
+            width = Enum.count(Enum.fetch! mines, 0) - 1
+            check_positions = for i <- x - 1..x + 1,
+                                  j <- y - 1..y + 1,
+                                  i in 0..width,
+                                  j in 0..height, do: {i, j}
+            Enum.reduce_while check_positions, {:ok, new_field}, uncover_reducer(mines)
+          all_non_mine_uncovered? new_field, mines -> {:win, new_field}
+          true -> {:ok, new_field}
         end
     end
   end
@@ -160,12 +158,17 @@ defmodule Minesweeper do
                           j in 0..height, do: {i, j}
     value = field |> Enum.fetch!(y) |> Enum.fetch!(x)
     if get_touch_count(field, x, y, :flag) == value do
-      Enum.reduce_while check_positions, {:ok, field}, fn
-        {n_x, n_y}, {:ok, next_field} -> {:cont, uncover(next_field, mines, n_x, n_y)}
-        {_, _}, {:lose, next_field} -> {:halt, {:lose, next_field}}
-      end
+      Enum.reduce_while check_positions, {:ok, field}, uncover_reducer(mines)
     else
       {:ok, field}
+    end
+  end
+
+  @spec uncover_reducer(mines_t) :: ({integer, integer}, {:win | :lose | :ok, field_t} ->
+    {:halt | :cont, {:win | :lose | :ok, field_t}})
+  defp uncover_reducer(mines) do
+    fn {x, y}, {:ok, next_field} -> {:cont, uncover(next_field, mines, x, y)}
+       _, acc -> {:halt, acc}
     end
   end
 
@@ -195,6 +198,27 @@ defmodule Minesweeper do
     end)
     |> Enum.filter(fn {type, pos} -> type == check_value && pos in check_positions end)
     |> Enum.count()
+  end
+
+  @spec all_non_mine_uncovered?(field_t, mines_t) :: true | false
+  def all_non_mine_uncovered?(field, mines) do
+    all_non_mines = mines
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {row, y} ->
+        row |> Enum.with_index() |> Enum.map(fn {type, x} -> {type, {x, y}} end)
+      end)
+      |> Enum.filter_map(fn {type, _} -> type != :mine end, fn {_, pos} -> pos end)
+      |> Enum.sort()
+
+    all_uncovered_field = field
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {row, y} ->
+        row |> Enum.with_index() |> Enum.map(fn {type, x} -> {type, {x, y}} end)
+      end)
+      |> Enum.filter_map(fn {type, _} -> type in 0..8 end, fn {_, pos} -> pos end)
+      |> Enum.sort()
+
+    all_non_mines == all_uncovered_field
   end
 end
 
