@@ -57,6 +57,11 @@ defmodule Minesweeper do
     GenServer.call {:global, "minesweeper:#{name}"}, {:pick, x, y}
   end
 
+  @spec force_pick(String.t, integer, integer) :: {:ok | :lose, field_t}
+  def force_pick(name, x, y) do
+    GenServer.call {:global, "minesweeper:#{name}"}, {:force_pick, x, y}
+  end
+
   @spec stop(String.t) :: :ok
   def stop(name), do: GenServer.cast {:global, "minesweeper:#{name}"}, :stop
 
@@ -75,6 +80,10 @@ defmodule Minesweeper do
   end
   def handle_call({:pick, x, y}, _from, %{field: field, mines: mines} = state) do
     {status, new_field} = uncover field, mines, x, y
+    {:reply, {status, new_field}, %{state | field: new_field}}
+  end
+  def handle_call({:force_pick, x, y}, _from, %{field: field, mines: mines} = state) do
+    {status, new_field} = force_uncover field, mines, x, y
     {:reply, {status, new_field}, %{state | field: new_field}}
   end
 
@@ -123,7 +132,7 @@ defmodule Minesweeper do
       {tile, _} when tile == :flag or is_integer(tile) -> {:ok, field} # its a flag, or uncovered
       {_, :mine} -> {:lose, reveal_mines(field, mines)} # BOOM
       {_, _} ->
-        value = get_touch_count mines, x, y
+        value = get_touch_count mines, x, y, :mine
         new_field = Util.nested_replace_at field, x, y, value
         if value == 0 do
           height = Enum.count(mines) - 1
@@ -142,6 +151,24 @@ defmodule Minesweeper do
     end
   end
 
+  defp force_uncover(field, mines, x, y) do
+    height = Enum.count(mines) - 1
+    width = Enum.count(Enum.fetch! mines, 0) - 1
+    check_positions = for i <- x - 1..x + 1,
+                          j <- y - 1..y + 1,
+                          i in 0..width,
+                          j in 0..height, do: {i, j}
+    value = field |> Enum.fetch!(y) |> Enum.fetch!(x)
+    if get_touch_count(field, x, y, :flag) == value do
+      Enum.reduce_while check_positions, {:ok, field}, fn
+        {n_x, n_y}, {:ok, next_field} -> {:cont, uncover(next_field, mines, n_x, n_y)}
+        {_, _}, {:lose, next_field} -> {:halt, {:lose, next_field}}
+      end
+    else
+      {:ok, field}
+    end
+  end
+
   @spec reveal_mines(field_t, mines_t) :: field_t
   defp reveal_mines(field, mines) do
     mines
@@ -153,8 +180,8 @@ defmodule Minesweeper do
     |> Enum.reduce(field, fn {x, y}, field -> Util.nested_replace_at(field, x, y, :mine) end)
   end
 
-  @spec get_touch_count(mines_t, integer, integer) :: integer
-  defp get_touch_count(mines, x, y) do
+  @spec get_touch_count(mines_t | field_t, integer, integer, :mine | :flag) :: integer
+  defp get_touch_count(mines, x, y, check_value) do
     height = Enum.count(mines) - 1
     width = Enum.count(Enum.fetch! mines, 0) - 1
     check_positions = for i <- x - 1..x + 1,
@@ -166,7 +193,7 @@ defmodule Minesweeper do
     |> Enum.flat_map(fn {row, y} ->
       row |> Enum.with_index() |> Enum.map(fn {type, x} -> {type, {x, y}} end)
     end)
-    |> Enum.filter(fn {type, pos} -> type == :mine && pos in check_positions end)
+    |> Enum.filter(fn {type, pos} -> type == check_value && pos in check_positions end)
     |> Enum.count()
   end
 end

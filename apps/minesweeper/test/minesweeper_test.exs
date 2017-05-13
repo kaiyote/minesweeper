@@ -41,7 +41,7 @@ defmodule MinesweeperTest do
       assert field == expected_field
     end
 
-    test "pick will auto-expand correctly if you pick near the bottom-right corner", %{name: name} do
+    test "will auto-expand correctly if you pick near the bottom-right corner", %{name: name} do
       {:ok, field} = Minesweeper.pick name, 8, 8
 
       expected_field = @seed_field
@@ -52,14 +52,14 @@ defmodule MinesweeperTest do
       assert field == expected_field
     end
 
-    test "pick will not uncover a :flag", %{name: name} do
+    test "will not uncover a :flag", %{name: name} do
       field = Minesweeper.flag name, 0, 1
       {:ok, pick_field} = Minesweeper.pick name, 0, 1
 
       assert pick_field == field
     end
 
-    test "pick will uncover a :maybe_flag", %{name: name} do
+    test "will uncover a :maybe_flag", %{name: name} do
       Minesweeper.flag name, 0, 1
       Minesweeper.flag name, 0, 1
       {:lose, pick_field} = Minesweeper.pick name, 0, 1
@@ -67,7 +67,7 @@ defmodule MinesweeperTest do
       assert pick_field == @seed_mines
     end
 
-    test "pick will do nothing on a number", %{name: name} do
+    test "will do nothing on a number", %{name: name} do
       {:ok, field} = Minesweeper.pick name, 0, 0
       {:ok, pick_field} = Minesweeper.pick name, 0, 0
 
@@ -76,7 +76,7 @@ defmodule MinesweeperTest do
   end
 
   describe "flag" do
-    test "flag will cycle from :blank, to :flag, to :maybe_flag, back to :blank", %{name: name} do
+    test "will cycle from :blank, to :flag, to :maybe_flag, back to :blank", %{name: name} do
       expected_field = nested_replace_at @seed_field, 0, 0, :flag
       assert Minesweeper.flag(name, 0, 0) == expected_field
 
@@ -86,9 +86,55 @@ defmodule MinesweeperTest do
       assert Minesweeper.flag(name, 0, 0) == @seed_field
     end
 
-    test "flag will do nothing if you try to flag a number", %{name: name} do
+    test "will do nothing if you try to flag a number", %{name: name} do
       {:ok, field} = Minesweeper.pick name, 0, 0
       assert Minesweeper.flag(name, 0, 0) == field
+    end
+  end
+
+  describe "force pick" do
+    test "will not expand if not enough flags", %{name: name} do
+      {:ok, field} = Minesweeper.pick name, 1, 1
+      {:ok, force_pick_field} = Minesweeper.force_pick name, 1, 1
+      assert field == force_pick_field
+    end
+
+    test "will expand if enough flags", %{name: name} do
+      {:ok, _} = Minesweeper.pick name, 1, 1
+      Minesweeper.flag name, 0, 1
+      Minesweeper.flag name, 2, 2
+      {:ok, field} = Minesweeper.force_pick name, 1, 1
+
+      expected_field = [[1,     1, 0,     0,      1, :blank, :blank, :blank, :blank],
+                        [:flag, 2, 1,     1,      1, :blank, :blank, :blank, :blank],
+                        [1,     2, :flag, :blank, :blank, :blank, :blank, :blank, :blank]] ++
+                        for _ <- 1..6, do: for _ <- 1..9, do: :blank
+      assert field == expected_field
+    end
+
+    test "will bomb if flags are set incorrectly", %{name: name} do
+      {:ok, _} = Minesweeper.pick name, 0, 0
+      Minesweeper.flag name, 1, 0
+      {:lose, field} = Minesweeper.force_pick name, 0, 0
+
+      expected_field = @seed_mines
+        |> nested_replace_at(0, 0, 1)
+        |> nested_replace_at(1, 0, :flag)
+
+      assert field == expected_field
+    end
+
+    test "will not expand on not a number", %{name: name} do
+      {:ok, _} = Minesweeper.pick name, 0, 0
+      field = Minesweeper.flag name, 0, 1
+
+      {:ok, force_field} = Minesweeper.force_pick name, 0, 1
+      assert field == force_field
+      {:ok, force_field} = Minesweeper.force_pick name, 1, 1
+      assert field == force_field
+      field = Minesweeper.flag name, 0, 1
+      {:ok, force_field} = Minesweeper.force_pick name, 0, 1
+      assert field == force_field
     end
   end
 
