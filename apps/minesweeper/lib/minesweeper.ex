@@ -52,12 +52,12 @@ defmodule Minesweeper do
     GenServer.call {:global, "minesweeper:#{name}"}, {:flag, x, y}
   end
 
-  @spec pick(String.t, integer, integer) :: {:ok | :lose, field_t}
+  @spec pick(String.t, integer, integer) :: {:ok | :lose | :win, field_t}
   def pick(name, x, y) do
     GenServer.call {:global, "minesweeper:#{name}"}, {:pick, x, y}
   end
 
-  @spec force_pick(String.t, integer, integer) :: {:ok | :lose, field_t}
+  @spec force_pick(String.t, integer, integer) :: {:ok | :lose | :win, field_t}
   def force_pick(name, x, y) do
     GenServer.call {:global, "minesweeper:#{name}"}, {:force_pick, x, y}
   end
