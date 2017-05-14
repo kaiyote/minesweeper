@@ -149,6 +149,7 @@ defmodule Minesweeper do
     end
   end
 
+  @spec force_uncover(field_t, mines_t, integer, integer) :: {:ok | :lose | :win, field_t}
   defp force_uncover(field, mines, x, y) do
     height = Enum.count(mines) - 1
     width = Enum.count(Enum.fetch! mines, 0) - 1
